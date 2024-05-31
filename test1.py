@@ -1,3 +1,5 @@
+import time
+
 import networkx as nx
 import matplotlib.pyplot as plt
 import random
@@ -41,6 +43,8 @@ def display_attributes(G, pos,title):
     cbar = fig.colorbar(sm, ax=axes[1], orientation='horizontal', pad=0.05)
     cbar.set_label('Proficiency')
     plt.suptitle(title)
+    # Save the combined plot as an image
+    plt.savefig(r"C:\Users\diarm\OneDrive\Desktop\school\Research\Model v0.1 photos\img"+str(time.time())+".png")
     plt.show()
 
 
@@ -61,9 +65,9 @@ def create_graph():
     display_attributes(G, pos,"Simulation at time 0")
 
     # Simulating interactions between agents
-    increment_value = 0.05
+    volatility_param = 0.05
 
-    num_iterations = 100
+    num_iterations = 38
 
     for i in range(num_iterations):
         for node in G.nodes():
@@ -73,18 +77,25 @@ def create_graph():
             num_neighbors = len(list(G.neighbors(node)))
 
             if neighbor_sum > num_neighbors:
-                G.nodes[node]['proficiency_next_turn'] = G.nodes[node]['proficiency'] + increment_value
+                G.nodes[node]['proficiency_next_turn'] = G.nodes[node]['proficiency'] + (1 * volatility_param)
             elif neighbor_sum < num_neighbors:
-                G.nodes[node]['proficiency_next_turn'] = G.nodes[node]['proficiency'] - increment_value
+                G.nodes[node]['proficiency_next_turn'] = G.nodes[node]['proficiency'] - (1 * volatility_param)
             else:
                 G.nodes[node]['proficiency_next_turn'] = G.nodes[node]['proficiency']
         # update attributes after interactions with neighbours are complete
         for node in G.nodes():
             G.nodes[node]['proficiency'] = G.nodes[node]['proficiency_next_turn']
 
-        if i % 10 == 0:
+        if i % 2 == 0:
             display_attributes(G, pos, "Simulation at time:"+str(i))
 
 
 # Call the function to create and display the graphs
 create_graph()
+
+
+# TODO: change increment_value to volatility -- DONE
+# TODO: write up results for model in its current state -- DONE
+# TODO: Change interaction code so the lower proficiency of the two is taken
+# TODO: add prestige variable
+
