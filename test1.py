@@ -44,7 +44,7 @@ def display_attributes(G, pos, title):
     cbar.set_label('Proficiency')
     plt.suptitle(title)
     # Save the combined plot as an image
-    #plt.savefig(r"C:\Users\diarm\OneDrive\Desktop\school\Research\Model v0.1 photos\img" + str(time.time()) + ".png")
+    plt.savefig(r"C:\Users\diarm\OneDrive\Desktop\school\Research\Model v0.2 - Lower proficiency taken\img" + str(time.time()) + ".png")
     plt.show()
 
 
@@ -105,15 +105,15 @@ def create_graph():
     # Simulating interactions between agents
     volatility_param = 0.1
 
-    num_iterations = 200
+    num_iterations = 100
 
     for i in range(num_iterations):
         for node in G.nodes():
-            # Sum the proficiencies and attitudes of the neighbors
-            neighbor_sum = sum(
-                G.nodes[neighbor]['proficiency'] + G.nodes[neighbor]['attitude'] for neighbor in G.neighbors(node))
+            # Take the lower proficiency of the two.
+            proficiency_sum = sum(min(G.nodes[neighbor]['proficiency'], G.nodes[node]['proficiency']) for neighbor in G.neighbors(node))
+            attitude_sum = sum(G.nodes[neighbor]['attitude'] for neighbor in G.neighbors(node))
+            neighbor_sum = proficiency_sum + attitude_sum
             num_neighbors = len(list(G.neighbors(node)))
-
             if neighbor_sum > num_neighbors:
                 G.nodes[node]['proficiency_next_turn'] = G.nodes[node]['proficiency'] + (1 * volatility_param)
             elif neighbor_sum < num_neighbors:
@@ -124,7 +124,7 @@ def create_graph():
         for node in G.nodes():
             G.nodes[node]['proficiency'] = G.nodes[node]['proficiency_next_turn']
 
-        if i % 20 == 0:
+        if i % 10 == 0:
             display_attributes(G, pos, "Simulation at time:" + str(i))
 
 
