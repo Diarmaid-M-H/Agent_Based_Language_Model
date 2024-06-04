@@ -1,3 +1,4 @@
+import copy
 import time
 import networkx as nx
 import networkx.generators.community as nx_comm
@@ -43,8 +44,16 @@ def display_attributes(G, pos, title):
     cbar = fig.colorbar(sm, ax=axes[1], orientation='horizontal', pad=0.05)
     cbar.set_label('Proficiency')
     plt.suptitle(title)
+    # Calculate average proficiency and proportion highly proficient
+    average_proficiency = sum(proficiencies) / len(proficiencies)
+    proportion_highly_proficient = sum(1 for p in proficiencies if p > 0.75) / len(proficiencies)
+
+    # Add the additional graphic with the calculated values
+    fig.text(0.5, 0.01,
+             f"Average Proficiency: {average_proficiency:.2f} | Proportion Highly Proficient: {proportion_highly_proficient:.2%}",
+             ha='center', fontsize=12, bbox={'facecolor': 'white', 'alpha': 0.8, 'pad': 5})
     # Save the combined plot as an image
-    plt.savefig(r"C:\Users\diarm\OneDrive\Desktop\school\Research\Model v0.2 - Lower proficiency taken\img" + str(time.time()) + ".png")
+    # plt.savefig(r"C:\Users\diarm\OneDrive\Desktop\school\Research\Model v0.2 - Lower proficiency taken\img" + str(time.time()) + ".png")
     plt.show()
 
 
@@ -84,6 +93,69 @@ def generateWS(n):
     return G
 
 
+def runBasicModel(G, pos, num_iterations, volatility_param):
+    for i in range(num_iterations):
+        for node in G.nodes():
+            # Take the lower proficiency of the two.
+            proficiency_sum = sum(
+                min(G.nodes[neighbor]['proficiency'], G.nodes[node]['proficiency']) for neighbor in G.neighbors(node))
+            attitude_sum = sum(G.nodes[neighbor]['attitude'] for neighbor in G.neighbors(node))
+            neighbor_sum = proficiency_sum + attitude_sum
+            num_neighbors = len(list(G.neighbors(node)))
+            if neighbor_sum > num_neighbors and (G.nodes[node]['proficiency'] + (1 * volatility_param)) <= 1:
+                G.nodes[node]['proficiency_next_turn'] = G.nodes[node]['proficiency'] + (1 * volatility_param)
+            elif neighbor_sum < num_neighbors and (G.nodes[node]['proficiency'] - (1 * volatility_param)) >= 0:
+                G.nodes[node]['proficiency_next_turn'] = G.nodes[node]['proficiency'] - (1 * volatility_param)
+            else:
+                G.nodes[node]['proficiency_next_turn'] = G.nodes[node]['proficiency']
+        # update attributes after interactions with neighbours are complete
+        for node in G.nodes():
+            G.nodes[node]['proficiency'] = G.nodes[node]['proficiency_next_turn']
+
+        # if i % 10 == 0:
+        # display_attributes(G, pos, "Simulation at time:" + str(i))
+    display_attributes(G, pos, "Simulation at time:" + str(num_iterations))
+
+
+def connectHighAttitudeAgents(Graph, proportionToConnect, numConnections):
+    # Rank nodes by attitude in descending order
+    nodes_sorted_by_attitude = sorted(Graph.nodes(data=True), key=lambda x: x[1]['attitude'], reverse=True)
+
+    # Select the top proportion of nodes
+    num_nodes_to_select = int(proportionToConnect * len(nodes_sorted_by_attitude))
+    high_attitude_nodes = [node[0] for node in nodes_sorted_by_attitude[:num_nodes_to_select]]
+
+    # Add random connections for each high-attitude node
+    for node in high_attitude_nodes:
+        # convert to list or get typeErrors
+        potential_connections = list(set(Graph.nodes()) - {node} - set(Graph.neighbors(node)))
+        connections_to_add = random.sample(potential_connections, min(numConnections, len(potential_connections)))
+
+        for target_node in connections_to_add:
+            if not Graph.has_edge(node, target_node):
+                Graph.add_edge(node, target_node)
+
+
+def connectHighProficiencyAgents(Graph, proportionToConnect, numConnections):
+    # Rank nodes by proficiency in descending order
+    nodes_sorted_by_proficiency = sorted(Graph.nodes(data=True), key=lambda x: x[1]['proficiency'], reverse=True)
+
+    # Select the top proportion of nodes
+    num_nodes_to_select = int(proportionToConnect * len(nodes_sorted_by_proficiency))
+    high_attitude_nodes = [node[0] for node in nodes_sorted_by_proficiency[:num_nodes_to_select]]
+
+    # Add random connections for each high-proficiency node
+    for node in high_attitude_nodes:
+        # convert to list or get typeErrors
+        potential_connections = list(set(Graph.nodes()) - {node} - set(Graph.neighbors(node)))
+        connections_to_add = random.sample(potential_connections, min(numConnections, len(potential_connections)))
+
+        for target_node in connections_to_add:
+            if not Graph.has_edge(node, target_node):
+                Graph.add_edge(node, target_node)
+
+
+
 def create_graph():
     # general params (specific params are in the relevant generation function
     n = 200  # Number of nodes
@@ -100,32 +172,18 @@ def create_graph():
 
     # Compute layout once and reuse it
     pos = nx.spring_layout(G)
-    display_attributes(G, pos, "Simulation at time 0")
+
+    # deep copy isntead of regular reference copy.
+    copiedGraph = copy.deepcopy(G)
+    #connectHighAttitudeAgents(copiedGraph, 0.1, 2)
+    connectHighProficiencyAgents(copiedGraph, 0.1, 1)
 
     # Simulating interactions between agents
     volatility_param = 0.1
+    num_iterations = 200
 
-    num_iterations = 100
-
-    for i in range(num_iterations):
-        for node in G.nodes():
-            # Take the lower proficiency of the two.
-            proficiency_sum = sum(min(G.nodes[neighbor]['proficiency'], G.nodes[node]['proficiency']) for neighbor in G.neighbors(node))
-            attitude_sum = sum(G.nodes[neighbor]['attitude'] for neighbor in G.neighbors(node))
-            neighbor_sum = proficiency_sum + attitude_sum
-            num_neighbors = len(list(G.neighbors(node)))
-            if neighbor_sum > num_neighbors:
-                G.nodes[node]['proficiency_next_turn'] = G.nodes[node]['proficiency'] + (1 * volatility_param)
-            elif neighbor_sum < num_neighbors:
-                G.nodes[node]['proficiency_next_turn'] = G.nodes[node]['proficiency'] - (1 * volatility_param)
-            else:
-                G.nodes[node]['proficiency_next_turn'] = G.nodes[node]['proficiency']
-        # update attributes after interactions with neighbours are complete
-        for node in G.nodes():
-            G.nodes[node]['proficiency'] = G.nodes[node]['proficiency_next_turn']
-
-        if i % 10 == 0:
-            display_attributes(G, pos, "Simulation at time:" + str(i))
+    runBasicModel(G, pos, num_iterations, volatility_param)
+    runBasicModel(copiedGraph, pos, num_iterations, volatility_param)
 
 
 # Call the function to create and display the graphs
@@ -133,5 +191,5 @@ create_graph()
 
 # TODO: change increment_value to volatility -- DONE
 # TODO: write up results for model in its current state -- DONE
-# TODO: Change interaction code so the lower proficiency of the two is taken
+# TODO: Change interaction code so the lower proficiency of the two is taken -- DONE
 # TODO: add prestige variable
