@@ -18,7 +18,7 @@ def display_attributes(G, pos, title):
             with_labels=False,
             node_color=attitudes,
             cmap=colormaps['Greens'],
-            edge_color='gray',
+            edge_color='#ebebe9',
             node_size=50,
             font_size=10)
     axes[0].set_title('Agent Attitude')
@@ -35,7 +35,7 @@ def display_attributes(G, pos, title):
             with_labels=False,
             node_color=proficiencies,
             cmap=colormaps['Reds'],
-            edge_color='gray',
+            edge_color='#ebebe9',
             node_size=50,
             font_size=10)
     axes[1].set_title('Agent Proficiency')
@@ -59,12 +59,14 @@ def display_attributes(G, pos, title):
 
 def generateLFR(n):
     # Params for LFR benchmark graph
-    tau1 = 3  # Power law exponent for the degree distribution
-    tau2 = 1.5  # Power law exponent for the community size distribution
-    mu = 0.05  # Fraction of intra-community edges
+    tau1 = 2  # Power law exponent for the degree distribution
+    tau2 = 1.1  # Power law exponent for the community size distribution
+    mu = 0.1  # Fraction of intra-community edges
+    min_degree = 2
+    max_degree = 10
 
     # Generate the LFR benchmark graph
-    G = nx_comm.LFR_benchmark_graph(n, tau1, tau2, mu, average_degree=5, min_community=20, seed=42)
+    G = nx_comm.LFR_benchmark_graph(n, tau1, tau2, mu, average_degree=20, min_community=20, seed=10)
     # Remove self-loops
     G.remove_edges_from(nx.selfloop_edges(G))
 
@@ -90,6 +92,29 @@ def generateWS(n):
     k = 5  # join node to its k nearest neighbours in a ring
     p = 0.1  # prob of rewiring each edge
     G = nx.watts_strogatz_graph(n, k, p)
+    return G
+
+
+def generateConnectedCaveman(num_cliques, clique_size, rewire_prob=0.0):
+    """
+    Generate a connected caveman graph with given number of cliques and clique size.
+
+    Parameters:
+    num_cliques (int): Number of communities (cliques).
+    clique_size (int): Number of nodes per community.
+    rewire_prob (float): Probability of rewiring each edge to introduce randomness.
+
+    Returns:
+    G (networkx.Graph): Generated connected caveman graph.
+    """
+    # Generate a connected caveman graph
+    G = nx.connected_caveman_graph(num_cliques, clique_size)
+
+    # Optionally, perturb the graph to make it less regular
+    if rewire_prob > 0:
+        num_edges_to_swap = int(rewire_prob * G.number_of_edges())
+        G = nx.double_edge_swap(G, nswap=num_edges_to_swap, max_tries=num_edges_to_swap * 10)
+
     return G
 
 
@@ -163,7 +188,8 @@ def create_graph():
     # WS - Watts Strogatz
     # G = generateWS(n)
     # LFR - Lancichinetti–Fortunato–Radicchi benchmark (community structure graph)
-    G = generateLFR(n)
+    #G = generateLFR(n)
+    G = generateConnectedCaveman(20, 10, 0.01)
 
     # Initialize 'attitude' and 'proficiency' attributes for each node
     for node in G.nodes():
@@ -174,16 +200,23 @@ def create_graph():
     pos = nx.spring_layout(G)
 
     # deep copy isntead of regular reference copy.
-    copiedGraph = copy.deepcopy(G)
-    #connectHighAttitudeAgents(copiedGraph, 0.1, 2)
-    connectHighProficiencyAgents(copiedGraph, 0.1, 1)
+    connectedHighProficiency = copy.deepcopy(G)
+    connectedHighAttitude = copy.deepcopy(G)
+    connectHighAttitudeAgents(connectedHighAttitude, 0.1, 3)
+    connectHighProficiencyAgents(connectedHighProficiency, 0.1, 3)
 
     # Simulating interactions between agents
     volatility_param = 0.1
-    num_iterations = 200
+    num_iterations = 1000
 
+    #run model on original graph
     runBasicModel(G, pos, num_iterations, volatility_param)
-    runBasicModel(copiedGraph, pos, num_iterations, volatility_param)
+
+    #run model on graph with high proficiency agents connected
+    runBasicModel(connectedHighProficiency, pos, num_iterations, volatility_param)
+
+    #run model on graph with high attitude agents connected
+    runBasicModel(connectedHighAttitude, pos, num_iterations, volatility_param)
 
 
 # Call the function to create and display the graphs
