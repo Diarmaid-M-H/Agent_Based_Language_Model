@@ -180,6 +180,30 @@ def connectHighProficiencyAgents(Graph, proportionToConnect, numConnections):
                 Graph.add_edge(node, target_node)
 
 
+def addAttributes(G):
+    proficiency_mean = 0.01
+    proficiency_standard_deviation = 0.1
+
+    attitude_mean = 0.1
+    attitude_standard_deviation = 0.1
+    # Initialize 'attitude' and 'proficiency' attributes for each node
+
+    #random distribution
+    # for node in G.nodes():
+    # G.nodes[node]['attitude'] = random.uniform(0, 1)
+    # G.nodes[node]['proficiency'] = random.uniform(0, 1)
+
+    #normal distribution
+    for node in G.nodes():
+        attitude = random.normalvariate(mu=attitude_mean, sigma=attitude_standard_deviation)
+        proficiency = random.normalvariate(mu=proficiency_mean, sigma=proficiency_standard_deviation)
+        # Ensure the values are within the [0, 1] range
+        attitude = min(max(attitude, 0), 1)
+        proficiency = min(max(proficiency, 0), 1)
+
+        G.nodes[node]['attitude'] = attitude
+        G.nodes[node]['proficiency'] = proficiency
+
 
 def create_graph():
     # general params (specific params are in the relevant generation function
@@ -191,10 +215,7 @@ def create_graph():
     #G = generateLFR(n)
     G = generateConnectedCaveman(20, 10, 0.01)
 
-    # Initialize 'attitude' and 'proficiency' attributes for each node
-    for node in G.nodes():
-        G.nodes[node]['attitude'] = random.uniform(0, 1)
-        G.nodes[node]['proficiency'] = random.uniform(0, 1)
+    addAttributes(G)
 
     # Compute layout once and reuse it
     pos = nx.spring_layout(G)
@@ -213,10 +234,10 @@ def create_graph():
     runBasicModel(G, pos, num_iterations, volatility_param)
 
     #run model on graph with high proficiency agents connected
-    runBasicModel(connectedHighProficiency, pos, num_iterations, volatility_param)
+    #runBasicModel(connectedHighProficiency, pos, num_iterations, volatility_param)
 
     #run model on graph with high attitude agents connected
-    runBasicModel(connectedHighAttitude, pos, num_iterations, volatility_param)
+    #runBasicModel(connectedHighAttitude, pos, num_iterations, volatility_param)
 
 
 # Call the function to create and display the graphs
