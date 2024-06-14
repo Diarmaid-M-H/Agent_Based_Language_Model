@@ -13,7 +13,7 @@ def display_attributes(G, pos, title):
     # Create subplots
 
     print("subplots..")
-    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(200, 100))
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(50, 25))
     # attitude graph
     print("attitude graph..")
     attitudes = [G.nodes[node]['attitude'] for node in G.nodes()]
@@ -50,14 +50,7 @@ def display_attributes(G, pos, title):
     cbar = fig.colorbar(sm, ax=axes[1], orientation='horizontal', pad=0.05)
     cbar.set_label('Proficiency')
     plt.suptitle(title)
-    # Calculate average proficiency and proportion highly proficient
-    average_proficiency = sum(proficiencies) / len(proficiencies)
-    proportion_highly_proficient = sum(1 for p in proficiencies if p > 0.75) / len(proficiencies)
-
-    # Add the additional graphic with the calculated values
-    fig.text(0.5, 0.01,
-             f"Average Proficiency: {average_proficiency:.2f} | Proportion Highly Proficient: {proportion_highly_proficient:.2%}",
-             ha='center', fontsize=12, bbox={'facecolor': 'white', 'alpha': 0.8, 'pad': 5})
+    print("before showing")
     # Save the combined plot as an image
     # plt.savefig(r"C:\Users\diarm\OneDrive\Desktop\school\Research\Model v0.2 - Lower proficiency taken\img" + str(time.time()) + ".png")
     plt.show()
@@ -239,7 +232,7 @@ def addAttributes(G):
         G.nodes[node]['proficiency'] = proficiency
 
 
-def createGraphFromFile(Electoral_Division="TULLAMORE RURAL"):
+def createGraphFromFile(Electoral_Division="TULLAMORE RURAL", divisor=10):
     # Read the file "SAPS_2022_RAW.csv"
     try:
         df = pd.read_csv("SAPS_2022_RAW.csv", encoding='ISO-8859-1')
@@ -253,8 +246,8 @@ def createGraphFromFile(Electoral_Division="TULLAMORE RURAL"):
     # Check if the row is empty
     if row.empty:
         print("electoral division not found")
+        return
 
-    # select row attributes
     # Create a new DataFrame for ED
     ED = pd.DataFrame()
 
@@ -283,9 +276,22 @@ def createGraphFromFile(Electoral_Division="TULLAMORE RURAL"):
     ED["Total"] = ED["very high proficiency"] + ED["high proficiency"] + ED["medium proficiency"] + ED[
         "low proficiency"] + ED["zero proficiency"]
 
-    # construct a random graph using the information from the dataframe ED.
-    G = generateConnectedCaveman(int(ED["Total"].iloc[0]), 30)
+    # Create a scaled version of ED
+    ScaledED = ED.copy()
+    for col in ["very high proficiency", "high proficiency", "medium proficiency", "low proficiency",
+                "zero proficiency"]:
+        ScaledED[col] = (ED[col] / divisor).round().astype(int)
+
+    # Recalculate the "Total" column for ScaledED
+    ScaledED["Total"] = ScaledED["very high proficiency"] + ScaledED["high proficiency"] + ScaledED[
+        "medium proficiency"] + ScaledED["low proficiency"] + ScaledED["zero proficiency"]
+
+    # Construct a random graph using the information from the dataframe ScaledED
+    #G = generateConnectedCaveman(int(ScaledED["Total"].iloc[0]), 30)
+    G = generateWS(int(ScaledED["Total"].iloc[0]))
     print("after generating graph")
+
+    # Define the mapping of proficiency levels to their values
     proficiency_map = {
         "very high proficiency": 1.0,
         "high proficiency": 0.75,
@@ -297,12 +303,18 @@ def createGraphFromFile(Electoral_Division="TULLAMORE RURAL"):
     # Initialize an empty list to hold the proficiency values for all nodes
     proficiencies = []
     print("before proficiency list population")
+
     # Populate the proficiencies list with the appropriate number of each proficiency level
     for proficiency_level, value in proficiency_map.items():
-        count = int(ED[proficiency_level].iloc[0])
+        count = int(ScaledED[proficiency_level].iloc[0])
+        print(proficiency_level+": "+str(count))
         for _ in range(count):
             proficiencies.append(value)
+
+    # Shuffle proficiency list to ensure random distribution
+    random.shuffle(proficiencies)
     print("before iteration through nodes")
+
     # Iterate through each node in the graph and assign the proficiency and attitude attributes
     for i, node in enumerate(G.nodes):
         G.nodes[node]["proficiency"] = proficiencies[i]
@@ -310,7 +322,9 @@ def createGraphFromFile(Electoral_Division="TULLAMORE RURAL"):
 
     print("before spring layout")
     pos = nx.spring_layout(G)
-    display_attributes(G,pos,"TEST")
+    #nx.draw(G,pos)
+    #plt.show()
+    display_attributes(G, pos, "TEST")
 
 
 def create_graph():
