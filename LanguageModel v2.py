@@ -7,53 +7,90 @@ import random
 from matplotlib import colormaps
 import pandas as pd
 import scipy as sp
+import matplotlib.colors as mcolors
+from matplotlib.lines import Line2D
+
+
+def create_custom_cmap():
+    colors = ['red', 'white', 'green']  # Red for negative, white for zero, green for positive
+    cmap = mcolors.LinearSegmentedColormap.from_list('custom_cmap', colors, N=256)
+    return cmap
 
 
 def display_attributes(G, pos, title):
-    # Create subplots
+    # Define colors
+    majorityColour = '#ebebe9'
+    neutralColour = 'green'
+    minorityColour = 'red'
 
-    print("subplots..")
+    # Create subplots
     fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(50, 25))
-    # attitude graph
-    print("attitude graph..")
+    # custom_cmap = create_custom_cmap()
+    custom_cmap = plt.get_cmap("bwr")
+
+    # Get edge colors based on language attribute
+    edge_colors = []
+    for u, v, data in G.edges(data=True):
+        if 'language' in data:
+            if data['language'] == 'minority':
+                edge_colors.append(minorityColour)
+            elif data['language'] == 'majority':
+                edge_colors.append(majorityColour)
+            elif data['language'] == 'neutral':
+                edge_colors.append(neutralColour)
+            else:
+                edge_colors.append(majorityColour)  # Default to majority color if not set correctly
+        else:
+            edge_colors.append(majorityColour)  # Default to majority color if attribute is missing
+
+    # Attitude graph
     attitudes = [G.nodes[node]['attitude'] for node in G.nodes()]
+    print(attitudes)
     nx.draw(G,
             pos,
             ax=axes[0],
             with_labels=False,
             node_color=attitudes,
-            cmap=colormaps['Greens'],
-            edge_color='#ebebe9',
+            cmap=custom_cmap,
+            edge_color=edge_colors,
             node_size=10,
             font_size=10)
     axes[0].set_title('Agent Attitude')
-    sm = plt.cm.ScalarMappable(cmap=colormaps['Greens'], norm=plt.Normalize(vmin=0, vmax=1))
+    sm = plt.cm.ScalarMappable(cmap=custom_cmap, norm=plt.Normalize(vmin=-1, vmax=1, clip=False))
     sm.set_array([])
     cbar = fig.colorbar(sm, ax=axes[0], orientation='horizontal', pad=0.05)
     cbar.set_label('Attitude')
 
-    # proficiency graph
-    print("proficiency graph..")
+    # Proficiency graph
     proficiencies = [G.nodes[node]['proficiency'] for node in G.nodes()]
     nx.draw(G,
             pos,
             ax=axes[1],
             with_labels=False,
             node_color=proficiencies,
-            cmap=colormaps['Reds'],
-            edge_color='#ebebe9',
+            cmap=custom_cmap,
+            edge_color=edge_colors,
             node_size=10,
             font_size=10)
     axes[1].set_title('Agent Proficiency')
-    sm = plt.cm.ScalarMappable(cmap=colormaps['Reds'], norm=plt.Normalize(vmin=0, vmax=1))
+    sm = plt.cm.ScalarMappable(cmap=custom_cmap, norm=plt.Normalize(vmin=-1, vmax=1))
     sm.set_array([])
     cbar = fig.colorbar(sm, ax=axes[1], orientation='horizontal', pad=0.05)
     cbar.set_label('Proficiency')
+
+    # Add legend for edge colors
+    legend_elements = [
+        Line2D([0], [0], color=majorityColour, lw=4, label='Majority'),
+        Line2D([0], [0], color=neutralColour, lw=4, label='Neutral'),
+        Line2D([0], [0], color=minorityColour, lw=4, label='Minority')
+    ]
+    plt.legend(handles=legend_elements, title="Agent interaction (edge) language", loc='center left',
+               bbox_to_anchor=(1, 0.5))
+
     plt.suptitle(title)
-    print("before showing")
     # Save the combined plot as an image
-    # plt.savefig(r"C:\Users\diarm\OneDrive\Desktop\school\Research\Model v0.2 - Lower proficiency taken\img" + str(time.time()) + ".png")
-    plt.show()
+    plt.savefig(r"C:\Users\diarm\OneDrive\Desktop\school\Research\ConventionRun1\img" + title + ".png")
+    plt.show(block=False)
 
 
 def generateLFR(n):
@@ -232,6 +269,91 @@ def addAttributes(G):
         G.nodes[node]['proficiency'] = proficiency
 
 
+def neutralConvention(G, edge):
+    node1, node2 = edge
+
+    # Retrieve node attributes
+    proficiency1 = G.nodes[node1]['proficiency']
+    proficiency2 = G.nodes[node2]['proficiency']
+    attitude1 = G.nodes[node1]['attitude']
+    attitude2 = G.nodes[node2]['attitude']
+
+    # Calculate minimum proficiency
+    minProficiency = min(proficiency1, proficiency2)
+
+    # Calculate conversation preferences
+    conversationPreference1 = attitude1 + minProficiency
+    conversationPreference2 = attitude2 + minProficiency
+
+    # Determine the language based on the sum of conversation preferences
+    totalPreference = conversationPreference1 + conversationPreference2
+    if totalPreference > 0:
+        language = 'minority'
+    elif totalPreference < 0:
+        language = 'majority'
+    else:
+        language = 'neutral'
+
+    # Set the edge attribute
+    G.edges[node1, node2]['language'] = language
+
+    return edge
+
+
+def minorityBiasedConvention(G, edge):
+    node1, node2 = edge
+
+    # Retrieve node attributes
+    proficiency1 = G.nodes[node1]['proficiency']
+    proficiency2 = G.nodes[node2]['proficiency']
+    attitude1 = G.nodes[node1]['attitude']
+    attitude2 = G.nodes[node2]['attitude']
+
+    # Calculate minimum proficiency
+    minProficiency = min(proficiency1, proficiency2)
+
+    # Calculate conversation preferences
+    conversationPreference1 = attitude1 + minProficiency
+    conversationPreference2 = attitude2 + minProficiency
+
+    if conversationPreference1 < 0 and conversationPreference2 < 0:
+        language = 'majority'
+    else:
+        language = 'minority'
+
+    # Set the edge attribute
+    G.edges[node1, node2]['language'] = language
+
+    return edge
+
+
+def majorityBiasedConvention(G, edge):
+    node1, node2 = edge
+
+    # Retrieve node attributes
+    proficiency1 = G.nodes[node1]['proficiency']
+    proficiency2 = G.nodes[node2]['proficiency']
+    attitude1 = G.nodes[node1]['attitude']
+    attitude2 = G.nodes[node2]['attitude']
+
+    # Calculate minimum proficiency
+    minProficiency = min(proficiency1, proficiency2)
+
+    # Calculate conversation preferences
+    conversationPreference1 = attitude1 + minProficiency
+    conversationPreference2 = attitude2 + minProficiency
+
+    if conversationPreference1 > 0 and conversationPreference2 > 0:
+        language = 'minority'
+    else:
+        language = 'majority'
+
+    # Set the edge attribute
+    G.edges[node1, node2]['language'] = language
+
+    return edge
+
+
 def createGraphFromFile(Electoral_Division="TULLAMORE RURAL", divisor=10):
     # Read the file "SAPS_2022_RAW.csv"
     try:
@@ -287,51 +409,61 @@ def createGraphFromFile(Electoral_Division="TULLAMORE RURAL", divisor=10):
         "medium proficiency"] + ScaledED["low proficiency"] + ScaledED["zero proficiency"]
 
     # Construct a random graph using the information from the dataframe ScaledED
-    #G = generateConnectedCaveman(int(ScaledED["Total"].iloc[0]), 30)
+    # G = generateConnectedCaveman(int(ScaledED["Total"].iloc[0]), 30)
     G = generateWS(int(ScaledED["Total"].iloc[0]))
-    print("after generating graph")
 
     # Define the mapping of proficiency levels to their values
     proficiency_map = {
-        "very high proficiency": 1.0,
-        "high proficiency": 0.75,
-        "medium proficiency": 0.5,
-        "low proficiency": 0.25,
-        "zero proficiency": 0.0
+        "very high proficiency": 0.5,
+        "high proficiency": 0.25,
+        "medium proficiency": 0.00,
+        "low proficiency": -0.25,
+        "zero proficiency": -1
     }
 
     # Initialize an empty list to hold the proficiency values for all nodes
     proficiencies = []
-    print("before proficiency list population")
 
     # Populate the proficiencies list with the appropriate number of each proficiency level
     for proficiency_level, value in proficiency_map.items():
         count = int(ScaledED[proficiency_level].iloc[0])
-        print(proficiency_level+": "+str(count))
+        print(proficiency_level + ": " + str(count))
         for _ in range(count):
             proficiencies.append(value)
 
     # Shuffle proficiency list to ensure random distribution
     random.shuffle(proficiencies)
-    print("before iteration through nodes")
 
-    # Iterate through each node in the graph and assign the proficiency and attitude attributes
+    # Iterate through each node in the graph and assign proficiency, attitude, individual preference.
     for i, node in enumerate(G.nodes):
-        G.nodes[node]["proficiency"] = proficiencies[i]
-        G.nodes[node]["attitude"] = 0.5
+        proficiency = proficiencies[i]
+        # attitude = random.uniform(-1, 1)
+        attitude = random.uniform(-1,1)
+        preference = proficiency + attitude
 
-    print("before spring layout")
+        G.nodes[node]["proficiency"] = proficiency
+        G.nodes[node]["attitude"] = attitude
+        G.nodes[node]["individualPreference"] = preference  # ranges from -2 to +2
+        # print(preference)
     pos = nx.spring_layout(G)
-    #nx.draw(G,pos)
-    #plt.show()
-    display_attributes(G, pos, "TEST")
+
+    for edge in G.edges:
+        majorityBiasedConvention(G, edge)
+    display_attributes(G, pos, "Majority Biased convention")
+
+    for edge in G.edges:
+        minorityBiasedConvention(G, edge)
+    display_attributes(G, pos, "Minority Biased convention")
+
+    for edge in G.edges:
+        neutralConvention(G, edge)
+    display_attributes(G, pos, "Neutral convention")
 
 
 def create_graph():
-
     return
+
 
 # Call the function to create and display the graphs
 # create_graph()
 createGraphFromFile()
-
