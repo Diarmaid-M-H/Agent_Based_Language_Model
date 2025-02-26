@@ -9,6 +9,7 @@ import pandas as pd
 import scipy as sp
 import matplotlib.colors as mcolors
 from matplotlib.lines import Line2D
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 
 def create_custom_cmap():
@@ -45,7 +46,7 @@ def display_attributes(G, pos, title):
 
     # Attitude graph
     attitudes = [G.nodes[node]['attitude'] for node in G.nodes()]
-    print(attitudes)
+    # print(attitudes)
     nx.draw(G,
             pos,
             ax=axes[0],
@@ -354,7 +355,40 @@ def majorityBiasedConvention(G, edge):
     return edge
 
 
-def createGraphFromFile(Electoral_Division="TULLAMORE RURAL", divisor=10):
+def calculate_proportions(G, convention_name="Unspecified Convention"):
+    # Calculate the proportion of edges with language attribute "minority"
+    minority_edges = [e for e in G.edges(data=True) if e[2].get('language') == 'minority']
+    total_edges = len(G.edges)
+    proportion_minority_edges = len(minority_edges) / total_edges if total_edges > 0 else 0
+
+    # Calculate the proportion of nodes with at least one edge having language attribute "minority"
+    nodes_with_minority_edge = set()
+    for u, v, data in minority_edges:
+        nodes_with_minority_edge.add(u)
+        nodes_with_minority_edge.add(v)
+    proportion_nodes_with_minority_edge = len(nodes_with_minority_edge) / len(G.nodes) if len(G.nodes) > 0 else 0
+
+    # Calculate the proportion of nodes for which a majority of their edges have the language attribute "minority"
+    minority_nodes_count = 0
+    for node in G.nodes:
+        edges = G.edges(node, data=True)
+        total_node_edges = len(edges)
+        minority_node_edges = sum(1 for _, _, data in edges if data.get('language') == 'minority')
+        if total_node_edges > 0 and minority_node_edges > total_node_edges / 2:
+            minority_nodes_count += 1
+    proportion_minority_nodes = minority_nodes_count / len(G.nodes) if len(G.nodes) > 0 else 0
+
+    # Create a dictionary with the results
+    data = {
+        f'{convention_name} - Proportion of minority edges': proportion_minority_edges,
+        f'{convention_name} - Proportion of nodes with at least one minority edge': proportion_nodes_with_minority_edge,
+        f'{convention_name} - Proportion of nodes with majority of edges having minority language': proportion_minority_nodes
+    }
+
+    return data
+
+
+def createGraphFromFile(row, divisor=1):
     # Read the file "SAPS_2022_RAW.csv"
     try:
         df = pd.read_csv("SAPS_2022_RAW.csv", encoding='ISO-8859-1')
@@ -363,7 +397,7 @@ def createGraphFromFile(Electoral_Division="TULLAMORE RURAL", divisor=10):
         return
 
     # Find the row where the "GEOGDESC" value matches the "Electoral_Division" parameter
-    row = df[df["GEOGDESC"] == Electoral_Division]
+    # row = df[df["GEOGDESC"] == Electoral_Division]
 
     # Check if the row is empty
     if row.empty:
@@ -427,7 +461,7 @@ def createGraphFromFile(Electoral_Division="TULLAMORE RURAL", divisor=10):
     # Populate the proficiencies list with the appropriate number of each proficiency level
     for proficiency_level, value in proficiency_map.items():
         count = int(ScaledED[proficiency_level].iloc[0])
-        print(proficiency_level + ": " + str(count))
+        # print(proficiency_level + ": " + str(count))
         for _ in range(count):
             proficiencies.append(value)
 
@@ -438,32 +472,81 @@ def createGraphFromFile(Electoral_Division="TULLAMORE RURAL", divisor=10):
     for i, node in enumerate(G.nodes):
         proficiency = proficiencies[i]
         # attitude = random.uniform(-1, 1)
-        attitude = random.uniform(-1,1)
+        attitude = random.uniform(-1, 1)
         preference = proficiency + attitude
 
         G.nodes[node]["proficiency"] = proficiency
         G.nodes[node]["attitude"] = attitude
         G.nodes[node]["individualPreference"] = preference  # ranges from -2 to +2
         # print(preference)
-    pos = nx.spring_layout(G)
+    # pos = nx.spring_layout(G) # Needed for graph writing but costly to run, so don't use otherwise
+    results = {}
 
     for edge in G.edges:
         majorityBiasedConvention(G, edge)
-    display_attributes(G, pos, "Majority Biased convention")
-
-    for edge in G.edges:
-        minorityBiasedConvention(G, edge)
-    display_attributes(G, pos, "Minority Biased convention")
+    results.update(calculate_proportions(G, "MAJORITY"))
 
     for edge in G.edges:
         neutralConvention(G, edge)
-    display_attributes(G, pos, "Neutral convention")
+    results.update(calculate_proportions(G, "NEUTRAL"))
+
+    for edge in G.edges:
+        minorityBiasedConvention(G, edge)
+    results.update(calculate_proportions(G, "MINORITY"))
+
+    # Convert the results dictionary to a DataFrame
+    result_df = pd.DataFrame([results])
+    #print(result_df.to_string())
+    return result_df
+
+    # TODO: record the percentage of edges that are minority language under each convention. DONE
+    # TODO: record the number of agents that have at least one minority language interaction DONE
+    # TODO: record the number of agents that have mostly minority langauge interactions. DONE
+
+    # TODO: record results with random model and with
+    # TODO: run model multiple times to test different random topologies
+    # TODO: Run model multiple times with different parameters, each time running multiple times.
 
 
 def create_graph():
     return
 
 
+def callModelForAllDivisions():
+    # Read the CSV file
+    data = pd.read_csv("SAPS_2022_RAW.csv", encoding='ISO-8859-1')
+
+    # Placeholder for the combined dataframe
+    combined_df = pd.DataFrame()
+
+    # Iterate over each row in the dataframe
+    for index, row in data.iterrows():
+        # Call the createGraphFromFile function
+        row_df = row.to_frame().T
+        # List to store results of 10 calls
+        result_list = []
+
+        for _ in range(10):
+            result_df = createGraphFromFile(row_df)
+            result_list.append(result_df)
+
+        # Calculate the average of the results
+        avg_result_df = pd.concat(result_list).groupby(level=0).mean()
+
+        # Combine row_df and avg_result_df horizontally
+        combined_row = pd.concat([row_df.reset_index(drop=True), avg_result_df.reset_index(drop=True)], axis=1)
+        print(combined_row.to_string)
+        # Combine the result with the main dataframe
+        combined_df = pd.concat([combined_df, combined_row], ignore_index=True)
+
+    # Return the combined dataframe
+    return combined_df
+
+
 # Call the function to create and display the graphs
 # create_graph()
-createGraphFromFile()
+# createGraphFromFile("GORUMNA")
+# createGraphFromFile("LETTERMORE")
+# createGraphFromFile("TULLAMORE URBAN")
+combined_df = callModelForAllDivisions()
+combined_df.to_csv(r'Outputs\combined_results.csv', index=False, encoding='ISO-8859-1')
